@@ -288,7 +288,7 @@ dl_export size_t dl_heap_usable_size(const void *mem) {
     return 0;
 }
 
-#ifdef DEBUG
+//#ifdef DEBUG
 
 static void internal_print_allocations(struct malloc_state *state) {
     ensure_initialization();
@@ -342,7 +342,7 @@ dl_export void dl_heap_print_allocations(dl_heap_t heap) {
     }
 }
 
-#endif /* DEBUG */
+//#endif /* DEBUG */
 
 #ifdef DEBUG
 

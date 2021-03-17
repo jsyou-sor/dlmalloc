@@ -8,10 +8,15 @@
 #include "init.h"
 #include "os.h"
 
+#include "log.h"
+
 /* For sys_alloc, enough padding to ensure can malloc request on success */
 #define SYS_ALLOC_PADDING       (TOP_FOOT_SIZE + MALLOC_ALIGNMENT)
 
 #define HALF_MAX_SIZE_T         (MAX_SIZE_T / 2U)
+
+#define HEAP_SIZE               2147483648
+#define REGION_SIZE             4294967296ull
 
 /* -----------------------  Direct-mmapping chunks ----------------------- */
 
@@ -97,6 +102,8 @@ struct malloc_chunk *mmap_resize(struct malloc_state *state, struct malloc_chunk
 void *sys_alloc(struct malloc_state *state, size_t size) {
     ensure_initialization();
 
+    dl_printf("[DEBUG]\tsys_alloc: size = %zu\n", size);
+
     /* Directly map large chunks, but only if already initialized */
     if (use_mmap(state) && size >= params.mmap_threshold && state->top_size != 0) {
         void *mem = mmap_alloc(state, size);
@@ -150,18 +157,30 @@ void *sys_alloc(struct malloc_state *state, size_t size) {
 
         if (ss == 0) {  /* First time through or recovery */
             char *base = (char *) call_sbrk(0);
+            dl_printf("[DEBUG]\tfirst time...");
+            dl_printf("base: %p, ssize: %zu\n", base, ssize);
             if (base != MFAIL) {
                 /* Adjust to end on a page boundary */
                 if (!is_page_aligned(base)) {
                     ssize += page_align((size_t) base) - (size_t) base;
                 }
                 size_t footprint = state->footprint + ssize;                 /* recheck limits */
+                dl_printf("[DEBUG]\tfootprint_limit: %zu\n", state->footprint_limit);
+                dl_printf("[DEBUG]\tHALF_MAX_SIZE_T: %zu\n", HALF_MAX_SIZE_T);
                 if (ssize > size
                     && ssize < HALF_MAX_SIZE_T
                     && (state->footprint_limit == 0 || (footprint > state->footprint && footprint <= state->footprint_limit))
                     && (br = (char *) call_sbrk(ssize)) == base) {
                     tbase = base;
                     tsize = ssize;
+
+                    // mmap 4G region
+                    int prot = PROT_NONE | PROT_READ | PROT_WRITE;
+                    int flags = MAP_NORESERVE | MAP_ANONYMOUS | MAP_PRIVATE;
+                    void *region = (void *)REGION_SIZE;
+                    void *ptr = mmap(region, HEAP_SIZE, prot, flags, -1, 0);
+                    if (region != ptr)
+                        dl_printf("[DEBUG]\tfailed to mmap memory\n");
                 }
             }
         }
@@ -246,6 +265,7 @@ void *sys_alloc(struct malloc_state *state, size_t size) {
             state->release_checks = MAX_RELEASE_CHECK_RATE;
             init_bins(state);
             if (is_global(state)) {
+                dl_printf("[DEBUG]\tinitial top chunk allocation\n");
                 init_top(state, (struct malloc_chunk *) tbase, tsize - TOP_FOOT_SIZE);
             }
             else {

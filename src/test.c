@@ -1,4 +1,8 @@
 #include <stdint.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 #include "malloc.h"
 #include "log.h"
@@ -11,8 +15,12 @@ void inspector(void *start, void *end, size_t used_bytes, void *callback_arg) {
 }
 
 void test_dl() {
+    dl_printf("Before malloc...\n");
+    getchar();    
     void *p1 = dl_malloc(8);
     dl_printf("p1=0x%016lX\n", (uintptr_t) p1);
+    dl_printf("After malloc...\n");
+    getchar();
     void *p2 = dl_malloc(16);
     dl_printf("p2=0x%016lX\n", (uintptr_t) p2);
     void *p3 = dl_malloc(1024 * 1024);
@@ -39,6 +47,7 @@ void test_dl() {
 }
 
 int main() {
+    dl_printf("pid: %d\n", getpid());
     test_dl();
     return 0;
 }
